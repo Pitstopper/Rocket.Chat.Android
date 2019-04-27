@@ -16,7 +16,7 @@ import chat.rocket.android.server.domain.isLdapAuthenticationEnabled
 import chat.rocket.android.server.domain.isPasswordResetEnabled
 import chat.rocket.android.server.domain.model.Account
 import chat.rocket.android.server.domain.wideTile
-import chat.rocket.android.server.infraestructure.RocketChatClientFactory
+import chat.rocket.android.server.infrastructure.RocketChatClientFactory
 import chat.rocket.android.util.extension.launchUI
 import chat.rocket.android.util.extensions.avatarUrl
 import chat.rocket.android.util.extensions.isEmail
@@ -60,7 +60,7 @@ class LoginPresenter @Inject constructor(
 
     private fun setupConnectionInfo(serverUrl: String) {
         currentServer = serverUrl
-        client = factory.create(currentServer)
+        client = factory.get(currentServer)
         settings = settingsInteractor.get(currentServer)
     }
 
@@ -85,20 +85,20 @@ class LoginPresenter @Inject constructor(
                     }
                 }
                 val myself = retryIO("me()") { client.me() }
-                if (myself.username != null) {
+                myself.username?.let { username ->
                     val user = User(
                         id = myself.id,
                         roles = myself.roles,
                         status = myself.status,
                         name = myself.name,
                         emails = myself.emails?.map { Email(it.address ?: "", it.verified) },
-                        username = myself.username,
+                        username = username,
                         utcOffset = myself.utcOffset
                     )
                     localRepository.saveCurrentUser(currentServer, user)
                     saveCurrentServer.save(currentServer)
-                    localRepository.save(LocalRepository.CURRENT_USERNAME_KEY, myself.username)
-                    saveAccount(myself.username!!)
+                    localRepository.save(LocalRepository.CURRENT_USERNAME_KEY, username)
+                    saveAccount(username)
                     saveToken(token)
                     analyticsManager.logLogin(
                         AuthenticationEvent.AuthenticationWithUserAndPassword,
@@ -133,7 +133,7 @@ class LoginPresenter @Inject constructor(
 
     fun forgotPassword() = navigator.toForgotPassword()
 
-    private suspend fun saveAccount(username: String) {
+    private fun saveAccount(username: String) {
         val icon = settings.favicon()?.let {
             currentServer.serverLogoUrl(it)
         }
